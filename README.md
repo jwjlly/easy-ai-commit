@@ -16,9 +16,9 @@
 </p>
 
 <p align="center">
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/v/34034?label=Marketplace&logo=jetbrains" alt="JetBrains Marketplace"></a>
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/d/34034" alt="Downloads"></a>
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/r/rating/34034" alt="Rating"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/v/34058?label=Marketplace&logo=jetbrains" alt="JetBrains Marketplace"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/d/34058" alt="Downloads"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/r/rating/34058" alt="Rating"></a>
 </p>
 
 ## Why Easy AI Commit?
@@ -49,7 +49,7 @@ Java 21 is required to build the project. End users run the plugin with the JetB
 
 ## Installation
 
-Install the latest release from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34034).
+Install the latest release from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34058).
 
 To install a development build instead, build the plugin from source:
 

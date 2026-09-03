@@ -16,9 +16,9 @@
 </p>
 
 <p align="center">
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/v/34034?label=Marketplace&logo=jetbrains" alt="JetBrains Marketplace"></a>
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/d/34034" alt="下载量"></a>
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/r/rating/34034" alt="评分"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/v/34058?label=Marketplace&logo=jetbrains" alt="JetBrains Marketplace"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/d/34058" alt="下载量"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/r/rating/34058" alt="评分"></a>
 </p>
 
 ## 为什么做 Easy AI Commit？
@@ -49,7 +49,7 @@
 
 ## 安装
 
-可从 [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34034) 安装最新版本。
+可从 [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34058) 安装最新版本。
 
 如需安装开发版本，也可以从源码构建：
 

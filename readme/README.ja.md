@@ -16,9 +16,9 @@
 </p>
 
 <p align="center">
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/v/34034?label=Marketplace&logo=jetbrains" alt="JetBrains Marketplace"></a>
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/d/34034" alt="ダウンロード数"></a>
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/r/rating/34034" alt="評価"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/v/34058?label=Marketplace&logo=jetbrains" alt="JetBrains Marketplace"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/d/34058" alt="ダウンロード数"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/r/rating/34058" alt="評価"></a>
 </p>
 
 ## Easy AI Commit を作った理由
@@ -49,7 +49,7 @@
 
 ## インストール
 
-最新版は [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34034) からインストールできます。
+最新版は [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34058) からインストールできます。
 
 開発版をインストールする場合は、ソースからプラグインをビルドしてください。
 

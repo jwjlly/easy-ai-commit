@@ -16,9 +16,9 @@
 </p>
 
 <p align="center">
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/v/34034?label=Marketplace&logo=jetbrains" alt="JetBrains Marketplace"></a>
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/d/34034" alt="다운로드 수"></a>
-  <a href="https://plugins.jetbrains.com/plugin/34034"><img src="https://img.shields.io/jetbrains/plugin/r/rating/34034" alt="평점"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/v/34058?label=Marketplace&logo=jetbrains" alt="JetBrains Marketplace"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/d/34058" alt="다운로드 수"></a>
+  <a href="https://plugins.jetbrains.com/plugin/34058"><img src="https://img.shields.io/jetbrains/plugin/r/rating/34058" alt="평점"></a>
 </p>
 
 ## Easy AI Commit을 만든 이유
@@ -49,7 +49,7 @@
 
 ## 설치
 
-최신 버전은 [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34034)에서 설치할 수 있습니다.
+최신 버전은 [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34058)에서 설치할 수 있습니다.
 
 개발 버전을 설치하려면 소스에서 플러그인을 빌드하세요.
 
