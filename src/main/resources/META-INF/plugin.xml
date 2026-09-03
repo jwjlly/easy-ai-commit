@@ -1,0 +1,81 @@
+<idea-plugin>
+    <id>com.layxy.easyaicommit.jetbrains</id>
+    <name>Easy AI Commit</name>
+    <vendor>Easy AI Commit</vendor>
+
+    <description><![CDATA[
+        <p><b>Easy AI Commit is a simple, flexible AI-assisted commit message generator for JetBrains IDEs.</b></p>
+        <p>
+            Existing plugins often support only OpenAI-style APIs, require complex setup, or do not allow
+            custom prompts. Easy AI Commit removes those trade-offs with a focused one-click workflow.
+        </p>
+
+        <h3>Model connectivity</h3>
+        <ul>
+            <li>First-class support for both OpenAI Compatible and Anthropic Compatible protocols.</li>
+            <li>
+                One Custom preset can use either protocol, making it suitable for compatible model providers,
+                aggregation services, gateways, and proxies.
+            </li>
+            <li>
+                Named model profiles support custom Base URLs, model IDs, API keys, and connection testing, so
+                multiple endpoints remain easy to configure and distinguish.
+            </li>
+        </ul>
+
+        <h3>Provider presets</h3>
+        <p>
+            Includes 24 named presets with protocol-specific defaults for endpoints, models, and authentication:
+        </p>
+        <ul>
+            <li>
+                <b>OpenAI Compatible and Anthropic Compatible:</b> DeepSeek, OpenRouter, GLM, Alibaba Bailian,
+                Kimi, MiniMax, SiliconFlow, StepFun, and Tencent TokenHub.
+            </li>
+            <li>
+                <b>OpenAI Compatible:</b> OpenAI, Gemini, Grok, Volcano Ark, Baidu Qianfan, iFlytek Spark,
+                Mistral AI, Groq, Together AI, Fireworks AI, Cerebras, Cohere, Perplexity, and Hugging Face.
+            </li>
+            <li><b>Anthropic Compatible:</b> Anthropic.</li>
+        </ul>
+
+        <h3>Commit message generation</h3>
+        <ul>
+            <li>
+                Click the Easy AI Commit logo to generate from included changes, or from all displayed pending
+                changes when nothing is included.
+            </li>
+            <li>Generated text is written directly into the existing Commit Message editor.</li>
+            <li>Custom prompt templates and 18 selectable output languages are supported.</li>
+            <li>Auto output language follows the current IDE language.</li>
+            <li>API keys are stored securely with JetBrains Password Safe.</li>
+        </ul>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
+
+    <resource-bundle>messages.EasyAiCommitBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationConfigurable
+                id="com.layxy.easyaicommit.settings"
+                instance="com.layxy.easyaicommit.settings.EasyAiCommitConfigurable"
+                key="settings.display.name"
+                bundle="messages.EasyAiCommitBundle"/>
+        <notificationGroup
+                id="Easy AI Commit"
+                key="notification.group.name"
+                displayType="BALLOON"
+                isLogByDefault="true"/>
+    </extensions>
+
+    <actions>
+        <action
+                id="com.layxy.easyaicommit.GenerateCommitMessage"
+                class="com.layxy.easyaicommit.action.GenerateCommitMessageAction"
+                icon="/icons/easyAiCommit.svg">
+            <add-to-group group-id="ChangesView.CommitToolbar" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

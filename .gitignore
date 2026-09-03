@@ -1,0 +1,25 @@
+# Gradle and Kotlin build state
+.gradle/
+.kotlin/
+build/
+out/
+
+# IntelliJ IDEA project-local files
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# IntelliJ Platform Gradle Plugin caches and sandbox
+.intellijPlatform/
+
+# Local environment and operating-system files
+.env
+.env.local
+.DS_Store
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*~
