@@ -4,6 +4,9 @@ import com.layxy.easyaicommit.model.ModelProfile
 import com.layxy.easyaicommit.model.ModelProtocol
 import com.layxy.easyaicommit.model.OutputLanguage
 import com.layxy.easyaicommit.model.ProviderPreset
+import com.layxy.easyaicommit.model.ProxyConfiguration
+import com.layxy.easyaicommit.model.ProxyMode
+import com.layxy.easyaicommit.model.ProxyType
 import com.layxy.easyaicommit.prompt.PromptTemplate
 import java.util.UUID
 
@@ -22,6 +25,8 @@ class ModelProfileState {
     var model: String = ProviderPreset.OPENAI.defaultConfig.defaultModel
     var outputLanguage: String = OutputLanguage.AUTO.id
     var promptTemplate: String = PromptTemplate.DEFAULT
+    var proxy: ProxySettingsState = ProxySettingsState()
+    var requestTimeoutSeconds: Int = 90
 
     fun toModel(): ModelProfile = ModelProfile(
         id = id,
@@ -32,6 +37,8 @@ class ModelProfileState {
         model = model,
         outputLanguage = OutputLanguage.normalize(outputLanguage),
         promptTemplate = promptTemplate,
+        proxy = proxy.toModel(),
+        requestTimeoutSeconds = requestTimeoutSeconds,
     )
 
     fun copyState(): ModelProfileState = ModelProfileState().also {
@@ -43,6 +50,8 @@ class ModelProfileState {
         it.model = model
         it.outputLanguage = outputLanguage
         it.promptTemplate = promptTemplate
+        it.proxy = proxy.copyState()
+        it.requestTimeoutSeconds = requestTimeoutSeconds
     }
 
     companion object {
@@ -62,6 +71,37 @@ class ModelProfileState {
             it.protocol = preset.defaultProtocol.name
             it.baseUrl = preset.defaultConfig.baseUrl
             it.model = preset.defaultConfig.defaultModel
+        }
+    }
+}
+
+class ProxySettingsState {
+    var mode: String = ProxyMode.IDE.name
+    var type: String = ProxyType.HTTP.name
+    var host: String = ""
+    var port: Int = 7890
+    var authentication: Boolean = false
+    var username: String = ""
+
+    fun toModel(): ProxyConfiguration = ProxyConfiguration(
+        mode = ProxyMode.fromStored(mode),
+        type = ProxyType.entries.firstOrNull { it.name == type } ?: ProxyType.HTTP,
+        host = host,
+        port = port,
+        authentication = authentication,
+        username = username,
+    )
+
+    fun copyState(): ProxySettingsState = fromModel(toModel())
+
+    companion object {
+        fun fromModel(proxy: ProxyConfiguration): ProxySettingsState = ProxySettingsState().also {
+            it.mode = proxy.mode.name
+            it.type = proxy.type.name
+            it.host = proxy.host
+            it.port = proxy.port
+            it.authentication = proxy.authentication
+            it.username = proxy.username
         }
     }
 }

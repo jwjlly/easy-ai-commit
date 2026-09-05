@@ -9,5 +9,6 @@ data class ModelProfile(
     val model: String,
     val outputLanguage: String,
     val promptTemplate: String,
+    val proxy: ProxyConfiguration = ProxyConfiguration(),
+    val requestTimeoutSeconds: Int = 90,
 )
-

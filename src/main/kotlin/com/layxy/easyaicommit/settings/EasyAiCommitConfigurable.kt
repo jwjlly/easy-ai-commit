@@ -32,6 +32,7 @@ class EasyAiCommitConfigurable : SearchableConfigurable {
     }
 
     override fun disposeUIResources() {
+        component?.dispose()
         component = null
     }
 }

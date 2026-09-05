@@ -4,19 +4,16 @@ import com.layxy.easyaicommit.EasyAiCommitBundle.message
 import com.layxy.easyaicommit.model.ApiKeyAuth
 import com.layxy.easyaicommit.model.ModelProfile
 import com.layxy.easyaicommit.model.ModelProtocol
+import com.layxy.easyaicommit.settings.ProxyPasswordStore
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.intellij.openapi.progress.ProgressIndicator
-import com.intellij.util.io.HttpRequests
-import java.net.HttpURLConnection
+import com.intellij.openapi.progress.ProcessCanceledException
 import java.util.Properties
 
 object CompatibleModelClient {
-    private const val CONNECT_TIMEOUT_MS = 15_000
-    private const val READ_TIMEOUT_MS = 90_000
-    private const val MAX_RESPONSE_CHARACTERS = 100_000
     private val gson = Gson()
     private val pluginVersion: String by lazy {
         val properties = Properties()
@@ -31,6 +28,7 @@ object CompatibleModelClient {
         apiKey: String,
         prompt: String,
         indicator: ProgressIndicator? = null,
+        proxyPassword: String? = null,
     ): String {
         require(profile.baseUrl.isNotBlank()) { message("client.error.baseUrlRequired") }
         require(profile.model.isNotBlank()) { message("client.error.modelRequired") }
@@ -45,9 +43,12 @@ object CompatibleModelClient {
             )
         }
 
+        profile.proxy.validate()
+        val password = if (profile.proxy.requiresPassword) proxyPassword ?: ProxyPasswordStore.load(profile) else ""
+        indicator?.checkCanceled()
         val response = when (profile.protocol) {
-            ModelProtocol.OPENAI_COMPATIBLE -> requestOpenAi(profile, apiKey, prompt, indicator)
-            ModelProtocol.ANTHROPIC_COMPATIBLE -> requestAnthropic(profile, apiKey, prompt, indicator)
+            ModelProtocol.OPENAI_COMPATIBLE -> requestOpenAi(profile, apiKey, prompt, indicator, password)
+            ModelProtocol.ANTHROPIC_COMPATIBLE -> requestAnthropic(profile, apiKey, prompt, indicator, password)
         }
 
         return cleanGeneratedMessage(response).ifBlank {
@@ -122,6 +123,7 @@ object CompatibleModelClient {
         apiKey: String,
         prompt: String,
         indicator: ProgressIndicator?,
+        proxyPassword: String,
     ): String {
         val body = gson.toJson(
             mapOf(
@@ -140,6 +142,8 @@ object CompatibleModelClient {
         )
 
         val response = postJson(
+            profile = profile,
+            proxyPassword = proxyPassword,
             url = endpoint(profile.baseUrl, profile.protocol),
             body = body,
             headers = buildMap {
@@ -159,6 +163,7 @@ object CompatibleModelClient {
         apiKey: String,
         prompt: String,
         indicator: ProgressIndicator?,
+        proxyPassword: String,
     ): String {
         val body = gson.toJson(
             mapOf(
@@ -172,6 +177,8 @@ object CompatibleModelClient {
         )
 
         val response = postJson(
+            profile = profile,
+            proxyPassword = proxyPassword,
             url = endpoint(profile.baseUrl, profile.protocol),
             body = body,
             headers = buildMap {
@@ -184,44 +191,25 @@ object CompatibleModelClient {
     }
 
     private fun postJson(
+        profile: ModelProfile,
+        proxyPassword: String,
         url: String,
         body: String,
         headers: Map<String, String>,
         indicator: ProgressIndicator?,
     ): String {
         try {
-            return HttpRequests.post(url, HttpRequests.JSON_CONTENT_TYPE)
-                .connectTimeout(CONNECT_TIMEOUT_MS)
-                .readTimeout(READ_TIMEOUT_MS)
-                .gzip(true)
-                .useProxy(true)
-                .userAgent("EasyAICommit/$pluginVersion")
-                .accept(HttpRequests.JSON_CONTENT_TYPE)
-                .isReadResponseOnError(true)
-                .throwStatusCodeException(false)
-                .tuner { connection ->
-                    headers.forEach(connection::setRequestProperty)
-                }
-                .connect { request ->
-                    indicator?.checkCanceled()
-                    request.write(body)
-                    val connection = request.connection as HttpURLConnection
-                    val status = connection.responseCode
-                    val responseBody = if (status in 200..299) {
-                        request.readString(indicator)
-                    } else {
-                        request.readError()
-                    }.orEmpty().take(MAX_RESPONSE_CHARACTERS)
-
-                    if (status !in 200..299) {
-                        val remoteMessage = runCatching { errorMessage(parseObject(responseBody)) }.getOrNull()
-                        val details = remoteMessage?.let { ": $it" }.orEmpty()
-                        throw ModelRequestException(
-                            message("client.error.requestHttp", status, details),
-                        )
-                    }
-                    responseBody
-                }
+            val response = ModelHttpTransport().postJson(
+                profile, url, body, headers + ("User-Agent" to "EasyAICommit/$pluginVersion"), proxyPassword, indicator,
+            )
+            if (response.status !in 200..299) {
+                val remoteMessage = runCatching { errorMessage(parseObject(response.body)) }.getOrNull()
+                val details = remoteMessage?.let { ": $it" }.orEmpty()
+                throw ModelRequestException(message("client.error.requestHttp", response.status, details))
+            }
+            return response.body
+        } catch (error: ProcessCanceledException) {
+            throw error
         } catch (error: ModelRequestException) {
             throw error
         } catch (error: Exception) {

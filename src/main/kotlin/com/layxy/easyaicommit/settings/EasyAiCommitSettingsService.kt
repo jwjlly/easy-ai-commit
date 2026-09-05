@@ -56,6 +56,7 @@ class EasyAiCommitSettingsService : PersistentStateComponent<EasyAiCommitSetting
                 profile.protocol = preset.defaultProtocol.name
             }
             profile.outputLanguage = OutputLanguage.normalize(profile.outputLanguage)
+            profile.requestTimeoutSeconds = profile.requestTimeoutSeconds.coerceIn(5, 300)
         }
         if (settingsState.profiles.none { it.id == settingsState.defaultProfileId }) {
             settingsState.defaultProfileId = settingsState.profiles.first().id

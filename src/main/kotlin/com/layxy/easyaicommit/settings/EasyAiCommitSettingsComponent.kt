@@ -5,10 +5,14 @@ import com.layxy.easyaicommit.client.CompatibleModelClient
 import com.layxy.easyaicommit.model.ModelProtocol
 import com.layxy.easyaicommit.model.OutputLanguage
 import com.layxy.easyaicommit.model.ProviderPreset
+import com.layxy.easyaicommit.model.ProxyMode
+import com.layxy.easyaicommit.model.ProxyType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.progress.EmptyProgressIndicator
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.SimpleTextAttributes
@@ -19,11 +23,14 @@ import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
+import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.components.ActionLink
+import com.intellij.openapi.options.ShowSettingsUtil
+import com.intellij.openapi.options.SearchableConfigurable
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.awt.FlowLayout
 import java.awt.Font
 import java.awt.event.ActionListener
 import java.util.UUID
@@ -51,7 +58,30 @@ internal class EasyAiCommitSettingsComponent {
     private val apiKey = JBPasswordField()
     private val clearApiKey = JButton(message("settings.button.clear"))
     private val testConnection = JButton(message("settings.button.testConnection"))
-    private val connectionStatus = JBLabel()
+    private val connectionStatus = JBTextArea(2, 35).apply {
+        isEditable = false
+        lineWrap = true
+        wrapStyleWord = true
+        isOpaque = false
+        font = JBLabel().font
+    }
+    private val proxyMode = ComboBox(ProxyMode.entries.toTypedArray())
+    private val proxyType = ComboBox(ProxyType.entries.toTypedArray())
+    private val proxyHost = JBTextField()
+    private val proxyPort = JBTextField("7890")
+    private val proxyAuthentication = JBCheckBox(message("proxy.label.authentication"))
+    private val proxyUsername = JBTextField()
+    private val proxyPassword = JBPasswordField()
+    private val clearProxyPassword = JButton(message("settings.button.clear"))
+    private val proxyDetails = JPanel(BorderLayout())
+    private val proxyAuthenticationFields = JPanel(BorderLayout())
+    private val openIdeProxy = ActionLink(message("proxy.openIdeSettings")) {
+        invalidateTest()
+        ShowSettingsUtil.getInstance().showSettingsDialog(
+            null, { it is SearchableConfigurable && it.id == "http.proxy" }, null,
+        )
+    }
+    private val requestTimeout = JSpinner(SpinnerNumberModel(90, 5, 300, 5))
     private val outputLanguage = ComboBox(OutputLanguage.options).withWidth(260)
     private val promptTemplate = JBTextArea(10, 48)
     private val maxDiffCharacters = JSpinner(SpinnerNumberModel(60_000, 5_000, 200_000, 5_000))
@@ -62,15 +92,31 @@ internal class EasyAiCommitSettingsComponent {
     private var loadingForm = false
     private val secretEdits = mutableMapOf<String, String>()
     private val removedProfileIds = mutableSetOf<String>()
+    private val proxySecretEdits = mutableMapOf<String, String>()
+    private var savedProfiles = emptyList<com.layxy.easyaicommit.model.ModelProfile>()
+    private var testIndicator: EmptyProgressIndicator? = null
+    private var testRevision = 0L
+    private var disposed = false
 
     val panel: JComponent = buildPanel()
 
     init {
+        mapOf(
+            "profiles" to profilesList, "providerPreset" to providerPreset,
+            "apiKey" to apiKey, "testConnection" to testConnection, "connectionStatus" to connectionStatus,
+            "proxyMode" to proxyMode, "proxyType" to proxyType, "proxyHost" to proxyHost,
+            "proxyPort" to proxyPort, "proxyAuthentication" to proxyAuthentication,
+            "proxyUsername" to proxyUsername, "proxyPassword" to proxyPassword,
+            "proxyDetails" to proxyDetails, "proxyAuthenticationFields" to proxyAuthenticationFields,
+            "requestTimeout" to requestTimeout,
+        ).forEach { (name, component) -> component.name = name }
         installListeners()
     }
 
     fun reset(snapshot: SettingsSnapshot) {
+        invalidateTest()
         loadingForm = true
+        savedProfiles = snapshot.profiles
         profilesModel.clear()
         snapshot.profiles.forEach { profile ->
             profilesModel.addElement(ModelProfileState().also {
@@ -82,11 +128,14 @@ internal class EasyAiCommitSettingsComponent {
                 it.model = profile.model
                 it.outputLanguage = profile.outputLanguage
                 it.promptTemplate = profile.promptTemplate
+                it.proxy = ProxySettingsState.fromModel(profile.proxy)
+                it.requestTimeoutSeconds = profile.requestTimeoutSeconds
             })
         }
         defaultProfileId = snapshot.defaultProfileId
         maxDiffCharacters.value = snapshot.maxDiffCharacters
         secretEdits.clear()
+        proxySecretEdits.clear()
         removedProfileIds.clear()
         loadingForm = false
 
@@ -100,13 +149,21 @@ internal class EasyAiCommitSettingsComponent {
             defaultProfileId != snapshot.defaultProfileId ||
             (maxDiffCharacters.value as Int) != snapshot.maxDiffCharacters ||
             secretEdits.isNotEmpty() ||
+            proxySecretEdits.isNotEmpty() ||
             removedProfileIds.isNotEmpty()
     }
 
     @Throws(ConfigurationException::class)
     fun apply(service: EasyAiCommitSettingsService) {
+        commitTimeoutEditor()
         val profiles = (0 until profilesModel.size).map { profilesModel.getElementAt(it).copyState() }
         profiles.forEach { profile ->
+            try {
+                profile.proxy.toModel().validate()
+                require(profile.requestTimeoutSeconds in 5..300) { message("network.validation.timeout") }
+            } catch (error: IllegalArgumentException) {
+                throw ConfigurationException(error.message.orEmpty())
+            }
             if (profile.name.isBlank()) {
                 throw ConfigurationException(message("settings.validation.profileName.empty"))
             }
@@ -129,27 +186,54 @@ internal class EasyAiCommitSettingsComponent {
             }
         }
 
-        service.replace(
-            profiles = profiles,
-            defaultProfileId = defaultProfileId,
-            maxDiffCharacters = maxDiffCharacters.value as Int,
-        )
-
         val keysToSave = secretEdits.toMap()
         val keysToRemove = removedProfileIds.toSet()
-        if (keysToSave.isNotEmpty() || keysToRemove.isNotEmpty()) {
+        val proxyKeysToSave = profiles.map { it.proxy.toModel().passwordKey(it.id) }.toSet()
+        val obsoleteProxyKeys = savedProfiles.map { it.proxy.passwordKey(it.id) }.toSet() - proxyKeysToSave
+        val passwordEdits = proxySecretEdits.filterKeys { it in proxyKeysToSave }
+        val edits = buildList {
+            keysToSave.forEach { (id, value) -> add(CredentialChanges.Edit({ ApiKeyStore.load(id) }, { ApiKeyStore.save(id, it) }, value)) }
+            passwordEdits.forEach { (key, value) -> add(CredentialChanges.Edit({ ProxyPasswordStore.loadKey(key) }, { ProxyPasswordStore.saveKey(key, it) }, value)) }
+            keysToRemove.forEach { id -> add(CredentialChanges.Edit({ ApiKeyStore.load(id) }, { ApiKeyStore.save(id, it) }, "")) }
+            obsoleteProxyKeys.forEach { key -> add(CredentialChanges.Edit({ ProxyPasswordStore.loadKey(key) }, { ProxyPasswordStore.saveKey(key, it) }, "")) }
+        }
+        var saveFailure: Exception? = null
+        var missingProxyPassword = false
+        if (edits.isNotEmpty() || profiles.any { it.proxy.toModel().requiresPassword }) {
             ProgressManager.getInstance().runProcessWithProgressSynchronously(
                 {
-                    keysToRemove.forEach(ApiKeyStore::remove)
-                    keysToSave.forEach { (profileId, apiKey) -> ApiKeyStore.save(profileId, apiKey) }
+                    try {
+                        profiles.filter { it.proxy.toModel().requiresPassword }.forEach { profile ->
+                            val key = profile.proxy.toModel().passwordKey(profile.id)
+                            if ((passwordEdits[key] ?: ProxyPasswordStore.load(profile.toModel())).isBlank()) {
+                                missingProxyPassword = true
+                                error(message("proxy.error.passwordMissing"))
+                            }
+                        }
+                        CredentialChanges.apply(edits) {
+                            profiles.filter { it.proxy.toModel().requiresPassword }.forEach {
+                                check(ProxyPasswordStore.load(it.toModel()).isNotBlank())
+                            }
+                        }
+                    } catch (error: Exception) {
+                        saveFailure = error
+                    }
                 },
                 message("settings.progress.savingCredentials"),
                 false,
                 null,
             )
         }
+        saveFailure?.let {
+            if (it is ProcessCanceledException) throw it
+            throw ConfigurationException(message(if (missingProxyPassword) "proxy.error.passwordMissing" else "credentials.error.save"))
+        }
+        service.replace(profiles, defaultProfileId, maxDiffCharacters.value as Int)
+        savedProfiles = service.snapshot().profiles
         secretEdits.clear()
+        proxySecretEdits.clear()
         removedProfileIds.clear()
+        loadSelectedProfile()
     }
 
     private fun buildPanel(): JComponent {
@@ -206,10 +290,38 @@ internal class EasyAiCommitSettingsComponent {
             add(apiKey, BorderLayout.CENTER)
             add(clearApiKey, BorderLayout.EAST)
         }
-        val connectionPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-            add(testConnection)
-            add(JBLabel("  "))
-            add(connectionStatus)
+        val connectionPanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+            add(testConnection, BorderLayout.WEST)
+            add(connectionStatus, BorderLayout.CENTER)
+        }
+
+        proxyPassword.emptyText.text = message("proxy.password.placeholder")
+        proxyHost.emptyText.text = "127.0.0.1"
+        val passwordPanel = JPanel(BorderLayout(JBUI.scale(6), 0)).apply {
+            add(proxyPassword, BorderLayout.CENTER)
+            add(clearProxyPassword, BorderLayout.EAST)
+        }
+        proxyAuthenticationFields.add(FormBuilder.createFormBuilder()
+            .addLabeledComponent(message("proxy.label.username"), proxyUsername)
+            .addLabeledComponent(message("proxy.label.password"), passwordPanel).panel)
+        proxyDetails.add(FormBuilder.createFormBuilder()
+            .addLabeledComponent(message("proxy.label.type"), proxyType)
+            .addLabeledComponent(message("proxy.label.host"), proxyHost)
+            .addLabeledComponent(message("proxy.label.port"), proxyPort)
+            .addComponent(proxyAuthentication)
+            .addComponent(proxyAuthenticationFields).panel)
+        val modePanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+            add(proxyMode, BorderLayout.CENTER)
+            add(openIdeProxy, BorderLayout.EAST)
+        }
+        val networkPanel = JPanel(BorderLayout()).apply {
+            add(modePanel, BorderLayout.NORTH)
+            add(proxyDetails, BorderLayout.CENTER)
+        }
+        requestTimeout.toolTipText = message("network.timeout.hint")
+        val timeoutPanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+            add(requestTimeout, BorderLayout.WEST)
+            add(JBLabel(message("network.timeout.hint")), BorderLayout.CENTER)
         }
 
         val form = FormBuilder.createFormBuilder()
@@ -219,6 +331,8 @@ internal class EasyAiCommitSettingsComponent {
             .addLabeledComponent(message("settings.label.baseUrl"), baseUrl)
             .addLabeledComponent(message("settings.label.model"), model)
             .addLabeledComponent(message("settings.label.apiKey"), apiKeyPanel)
+            .addLabeledComponent(message("proxy.label.mode"), networkPanel)
+            .addLabeledComponent(message("network.label.timeout"), timeoutPanel)
             .addLabeledComponent(message("settings.label.connection"), connectionPanel)
             .addLabeledComponent(message("settings.label.outputLanguage"), outputLanguage)
             .addLabeledComponent(message("settings.label.maximumChangeSize"), maxDiffCharacters)
@@ -252,7 +366,7 @@ internal class EasyAiCommitSettingsComponent {
 
     private fun installListeners() {
         profilesList.addListSelectionListener { event ->
-            if (!event.valueIsAdjusting) loadSelectedProfile()
+            if (!loadingForm && !event.valueIsAdjusting) loadSelectedProfile()
         }
 
         profileName.onTextChanged { updateCurrentProfile { it.name = profileName.text } }
@@ -260,7 +374,57 @@ internal class EasyAiCommitSettingsComponent {
         model.onTextChanged { updateCurrentProfile { it.model = model.text } }
         promptTemplate.onTextChanged { updateCurrentProfile { it.promptTemplate = promptTemplate.text } }
         apiKey.onTextChanged {
-            if (!loadingForm) currentProfileId?.let { secretEdits[it] = String(apiKey.password) }
+            if (!loadingForm) currentProfileId?.let {
+                secretEdits[it] = String(apiKey.password)
+                invalidateTest()
+            }
+        }
+        proxyMode.addActionListener {
+            updateCurrentProfile { it.proxy.mode = (proxyMode.selectedItem as ProxyMode).name }
+            refreshProxyFields()
+        }
+        proxyType.addActionListener {
+            if (!loadingForm) {
+                updateCurrentProfile {
+                    it.proxy.type = (proxyType.selectedItem as ProxyType).name
+                    if (proxyType.selectedItem == ProxyType.SOCKS5) it.proxy.authentication = false
+                }
+                loadingForm = true
+                proxyAuthentication.isSelected = profilesList.selectedValue?.proxy?.authentication == true
+                loadingForm = false
+                loadProxySecretEdit()
+            }
+            refreshProxyFields()
+        }
+        proxyHost.onTextChanged {
+            updateCurrentProfile { it.proxy.host = proxyHost.text.trim() }
+            if (!loadingForm) loadProxySecretEdit()
+        }
+        proxyPort.onTextChanged {
+            updateCurrentProfile { it.proxy.port = proxyPort.text.toIntOrNull() ?: 0 }
+            if (!loadingForm) loadProxySecretEdit()
+        }
+        proxyUsername.onTextChanged {
+            updateCurrentProfile { it.proxy.username = proxyUsername.text.trim() }
+            if (!loadingForm) loadProxySecretEdit()
+        }
+        proxyAuthentication.addActionListener {
+            updateCurrentProfile { it.proxy.authentication = proxyAuthentication.isSelected }
+            refreshProxyFields()
+        }
+        proxyPassword.onTextChanged {
+            if (!loadingForm) currentProxyKey()?.let {
+                proxySecretEdits[it] = String(proxyPassword.password)
+                invalidateTest()
+            }
+        }
+        clearProxyPassword.addActionListener {
+            currentProxyKey()?.let { proxySecretEdits[it] = "" }
+            loadProxySecretEdit()
+            invalidateTest()
+        }
+        requestTimeout.addChangeListener {
+            updateCurrentProfile { it.requestTimeoutSeconds = requestTimeout.value as Int }
         }
 
         providerPreset.addActionListener {
@@ -303,6 +467,7 @@ internal class EasyAiCommitSettingsComponent {
                 loadingForm = true
                 apiKey.text = ""
                 loadingForm = false
+                invalidateTest()
             }
         }
         setDefault.addActionListener {
@@ -315,6 +480,7 @@ internal class EasyAiCommitSettingsComponent {
     }
 
     private fun loadSelectedProfile() {
+        invalidateTest()
         val profile = profilesList.selectedValue
         currentProfileId = profile?.id
         loadingForm = true
@@ -333,9 +499,18 @@ internal class EasyAiCommitSettingsComponent {
             outputLanguage.selectedItem = OutputLanguage.fromStored(profile.outputLanguage)
             promptTemplate.text = profile.promptTemplate
             apiKey.text = secretEdits[profile.id].orEmpty()
+            proxyMode.selectedItem = ProxyMode.fromStored(profile.proxy.mode)
+            proxyType.selectedItem = profile.proxy.toModel().type
+            proxyHost.text = profile.proxy.host
+            proxyPort.text = profile.proxy.port.toString()
+            proxyAuthentication.isSelected = profile.proxy.authentication
+            proxyUsername.text = profile.proxy.username
+            proxyPassword.text = proxySecretEdits[profile.proxy.toModel().passwordKey(profile.id)].orEmpty()
+            requestTimeout.value = profile.requestTimeoutSeconds
         }
         connectionStatus.text = ""
         loadingForm = false
+        refreshProxyFields()
         refreshDefaultButton()
     }
 
@@ -386,26 +561,49 @@ internal class EasyAiCommitSettingsComponent {
     }
 
     private fun testCurrentConnection() {
+        try {
+            commitTimeoutEditor()
+            profilesList.selectedValue?.proxy?.toModel()?.validate()
+        } catch (error: Exception) {
+            connectionStatus.text = error.message.orEmpty()
+            return
+        }
         val profile = profilesList.selectedValue?.copyState() ?: return
         val editedSecret = secretEdits[profile.id]
+        val editedProxySecret = proxySecretEdits[profile.proxy.toModel().passwordKey(profile.id)]
+        invalidateTest()
+        val revision = testRevision
+        val indicator = EmptyProgressIndicator()
+        testIndicator = indicator
+        val unsaved = isModified(EasyAiCommitSettingsService.getInstance().snapshot())
         testConnection.isEnabled = false
         connectionStatus.text = message("settings.connection.testing")
 
         ApplicationManager.getApplication().executeOnPooledThread {
+            val started = System.nanoTime()
             val result = runCatching {
+                indicator.checkCanceled()
                 val key = editedSecret ?: ApiKeyStore.load(profile.id)
                 if (key.isBlank()) error(message("settings.connection.apiKeyRequired"))
                 CompatibleModelClient.generate(
                     profile = profile.toModel(),
                     apiKey = key,
                     prompt = "Return exactly: OK",
+                    proxyPassword = editedProxySecret,
+                    indicator = indicator,
                 )
             }
             ApplicationManager.getApplication().invokeLater(
                 {
+                    if (disposed || testRevision != revision || indicator.isCanceled) return@invokeLater
+                    testIndicator = null
                     testConnection.isEnabled = true
                     connectionStatus.text = result.fold(
-                        onSuccess = { message("settings.connection.success") },
+                        onSuccess = {
+                            val seconds = String.format(java.util.Locale.ROOT, "%.1f", (System.nanoTime() - started) / 1_000_000_000.0)
+                            message("network.connection.success", profile.proxy.toModel().description(), seconds) +
+                                if (unsaved) " · " + message("network.connection.unsaved") else ""
+                        },
                         onFailure = {
                             message("settings.connection.failed", it.message.orEmpty())
                         },
@@ -420,7 +618,51 @@ internal class EasyAiCommitSettingsComponent {
         if (loadingForm) return
         val profile = profilesList.selectedValue ?: return
         update(profile)
+        invalidateTest()
         profilesList.repaint()
+    }
+
+    private fun currentProxyKey(): String? = profilesList.selectedValue?.let { it.proxy.toModel().passwordKey(it.id) }
+
+    private fun loadProxySecretEdit() {
+        loadingForm = true
+        proxyPassword.text = currentProxyKey()?.let { proxySecretEdits[it] }.orEmpty()
+        loadingForm = false
+    }
+
+    private fun refreshProxyFields() {
+        proxyDetails.isVisible = proxyMode.selectedItem == ProxyMode.CUSTOM
+        openIdeProxy.isVisible = proxyMode.selectedItem == ProxyMode.IDE
+        proxyAuthentication.isVisible = proxyType.selectedItem == ProxyType.HTTP
+        proxyAuthenticationFields.isVisible = proxyAuthentication.isVisible && proxyAuthentication.isSelected
+        panel.revalidate()
+        panel.repaint()
+    }
+
+    private fun commitTimeoutEditor() {
+        try {
+            requestTimeout.commitEdit()
+        } catch (_: java.text.ParseException) {
+            throw ConfigurationException(message("network.validation.timeout"))
+        }
+    }
+
+    private fun invalidateTest() {
+        testRevision++
+        testIndicator?.cancel()
+        testIndicator = null
+        connectionStatus.text = ""
+        testConnection.isEnabled = !disposed && profilesList.selectedValue != null
+    }
+
+    fun dispose() {
+        disposed = true
+        invalidateTest()
+        secretEdits.clear()
+        proxySecretEdits.clear()
+        loadingForm = true
+        apiKey.text = ""
+        proxyPassword.text = ""
     }
 
     private fun refreshDefaultButton() {
@@ -445,6 +687,8 @@ internal class EasyAiCommitSettingsComponent {
             testConnection,
             outputLanguage,
             promptTemplate,
+            proxyMode, proxyType, proxyHost, proxyPort, proxyAuthentication,
+            proxyUsername, proxyPassword, clearProxyPassword, requestTimeout, openIdeProxy,
         ).forEach { it.isEnabled = enabled }
         val selectedPreset = providerPreset.selectedItem as? ProviderPreset
         protocol.isEnabled = enabled && (selectedPreset?.supportedProtocols?.size ?: 0) > 1

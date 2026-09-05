@@ -101,6 +101,7 @@ class GenerateCommitMessageAction : AnAction(), DumbAware {
 
                 val prompt = PromptTemplate.render(profile, payload.files, payload.content)
                 generatedMessage = CompatibleModelClient.generate(profile, apiKey, prompt, indicator)
+                indicator.checkCanceled()
             }
 
             override fun onSuccess() {

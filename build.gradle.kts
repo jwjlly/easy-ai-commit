@@ -27,6 +27,13 @@ dependencies {
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
     }
 
+    // Kotlin 1.9-compatible client for the 2024.2 platform baseline.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0") {
+        // Use the platform's Kotlin runtime instead of packaging a second copy.
+        exclude(group = "org.jetbrains.kotlin")
+    }
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
     testImplementation(kotlin("test"))
 }
 
