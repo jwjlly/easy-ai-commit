@@ -74,10 +74,10 @@ Generation starts immediately. When it succeeds, the current Commit Message text
 
 Each model profile has its own **Network Proxy** and **Request Timeout (seconds)** settings, above **Test Connection**.
 
-- **Use IDE proxy settings** (default): follows the IDE proxy, PAC, authentication, and bypass rules. Use **Open IDE proxy settings** to configure them.
-- **No proxy**: connects directly for this model, even when an IDE proxy is configured.
+- **Use IDE proxy settings**: follows the IDE proxy, PAC, authentication, and bypass rules. Use **Open IDE proxy settings** to configure them.
+- **No proxy** (default): connects directly for this model, even when an IDE proxy is configured.
 - **Custom proxy**: enter a hostname/IP and port (`1–65535`). Supports HTTP (including HTTPS CONNECT), optional HTTP Basic authentication, and SOCKS5 without authentication. SOCKS5 resolves the destination hostname through the proxy. Authenticated SOCKS5 and enterprise authentication schemes are not supported.
-- **Request Timeout**: `5–300` seconds, default `90`. Set it to `15` or `30` for faster failure. The budget covers the entire network request, including DNS, proxy/TLS connection, sending, and reading the full response; local diff collection and credential retrieval are excluded. Existing profiles use IDE proxy settings and 90 seconds. The new total deadline is stricter than the previous 90-second read timeout.
+- **Request Timeout**: `5–300` seconds, default `90`. Set it to `15` or `30` for faster failure. The budget covers the entire network request, including DNS, proxy/TLS connection, sending, and reading the full response; local diff collection and credential retrieval are excluded. New profiles and profiles without a stored proxy mode default to no proxy; explicitly stored proxy choices are preserved. The default timeout is 90 seconds. The new total deadline is stricter than the previous 90-second read timeout.
 
 A failed custom proxy does not fall back to a direct connection. A timeout cancels the request, restores the generation button, and leaves the existing commit message unchanged. Late responses are discarded; requests are not automatically retried by the plugin.
 

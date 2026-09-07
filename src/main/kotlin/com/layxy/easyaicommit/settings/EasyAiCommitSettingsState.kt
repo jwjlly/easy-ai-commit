@@ -76,7 +76,7 @@ class ModelProfileState {
 }
 
 class ProxySettingsState {
-    var mode: String = ProxyMode.IDE.name
+    var mode: String = ProxyMode.DIRECT.name
     var type: String = ProxyType.HTTP.name
     var host: String = ""
     var port: Int = 7890

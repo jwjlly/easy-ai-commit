@@ -71,7 +71,8 @@ class EasyAiCommitSettingsComponentTest : LightPlatformTestCase() {
             component.reset(snapshot)
             assertFalse(component.isModified(snapshot))
             profiles.selectedIndex = 1
-            render(component, "ide-proxy")
+            assertEquals(ProxyMode.DIRECT, (component.find("proxyMode") as JComboBox<*>).selectedItem)
+            render(component, "direct")
         } finally { component.dispose() }
     }
 

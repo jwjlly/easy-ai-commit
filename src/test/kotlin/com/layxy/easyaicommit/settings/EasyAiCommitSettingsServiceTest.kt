@@ -13,12 +13,36 @@ import com.intellij.util.xmlb.XmlSerializer
 
 class EasyAiCommitSettingsServiceTest {
     @Test
-    fun `existing profiles default to IDE proxy and ninety second deadline`() {
+    fun `profiles without proxy settings default to direct and ninety second deadline`() {
         val service = EasyAiCommitSettingsService()
         service.loadState(stateWith(ProviderPreset.OPENAI, ModelProtocol.OPENAI_COMPATIBLE))
         val profile = service.snapshot().defaultProfile!!
-        assertEquals(ProxyMode.IDE, profile.proxy.mode)
+        assertEquals(ProxyMode.DIRECT, profile.proxy.mode)
         assertEquals(90, profile.requestTimeoutSeconds)
+    }
+
+    @Test
+    fun `new profiles and missing stored modes use no proxy`() {
+        ProviderPreset.entries.forEach {
+            assertEquals(ProxyMode.DIRECT, ModelProfileState.fromPreset(it).toModel().proxy.mode)
+        }
+        assertEquals(ProxyMode.DIRECT, ProxyConfiguration().mode)
+        assertEquals(ProxyMode.DIRECT, ProxyMode.fromStored(""))
+        assertEquals(ProxyMode.DIRECT, ProxyMode.fromStored("unknown"))
+        val legacy = XmlSerializer.deserialize(org.jdom.Element("ModelProfileState"), ModelProfileState::class.java)
+        assertEquals(ProxyMode.DIRECT, legacy.toModel().proxy.mode)
+    }
+
+    @Test
+    fun `explicit stored proxy choices remain unchanged`() {
+        ProxyMode.entries.forEach { mode ->
+            val original = stateWith(ProviderPreset.OPENAI, ModelProtocol.OPENAI_COMPATIBLE)
+            original.profiles.single().proxy.mode = mode.name
+            val restored = XmlSerializer.deserialize(XmlSerializer.serialize(original), EasyAiCommitSettingsState::class.java)
+            val service = EasyAiCommitSettingsService()
+            service.loadState(restored)
+            assertEquals(mode, service.snapshot().defaultProfile!!.proxy.mode)
+        }
     }
 
     @Test

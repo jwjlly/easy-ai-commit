@@ -55,9 +55,9 @@ class ModelHttpTransportTest {
                 ProxySelector.setDefault(selector)
                 try {
                     val url = target.url("/v1/chat/completions").toString()
-                    val inherited = transport.postJson(profile(ProxyConfiguration()), url, "{}", emptyMap(), "", null)
+                    val inherited = transport.postJson(profile(ProxyConfiguration(ProxyMode.IDE)), url, "{}", emptyMap(), "", null)
                     assertEquals("proxied", inherited.body)
-                    val direct = transport.postJson(profile(), url, "{}", emptyMap(), "", null)
+                    val direct = transport.postJson(profile(ProxyConfiguration()), url, "{}", emptyMap(), "", null)
                     assertEquals("direct", direct.body)
                     assertEquals(1, target.requestCount)
                     assertEquals(1, proxy.requestCount)

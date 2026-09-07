@@ -67,7 +67,8 @@ intellijPlatform {
                 <li>Added credential save read-back verification and clearer proxy errors.
                     Connection tests use current form values and discard stale results.</li>
                 <li>Updated English, Simplified Chinese, Japanese, and Korean UI text and documentation.</li>
-                <li>Existing profiles default to IDE proxy settings and a 90-second total timeout.
+                <li>New profiles and profiles without a stored proxy mode default to no proxy (direct connection).
+                    Explicitly stored proxy choices are preserved. The default total timeout is 90 seconds.
                     The IntelliJ IDEA 2024.2 minimum supported version is unchanged.</li>
             </ul>
         """.trimIndent()

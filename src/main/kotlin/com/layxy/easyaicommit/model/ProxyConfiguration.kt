@@ -10,14 +10,14 @@ enum class ProxyMode {
     override fun toString(): String = message("proxy.mode.${name.lowercase()}")
 
     companion object {
-        fun fromStored(value: String): ProxyMode = entries.firstOrNull { it.name == value } ?: IDE
+        fun fromStored(value: String): ProxyMode = entries.firstOrNull { it.name == value } ?: DIRECT
     }
 }
 
 enum class ProxyType { HTTP, SOCKS5 }
 
 data class ProxyConfiguration(
-    val mode: ProxyMode = ProxyMode.IDE,
+    val mode: ProxyMode = ProxyMode.DIRECT,
     val type: ProxyType = ProxyType.HTTP,
     val host: String = "",
     val port: Int = 7890,
