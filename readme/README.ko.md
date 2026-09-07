@@ -2,6 +2,8 @@
   <img src="../branding/easy-ai-commit-logo.png" alt="Easy AI Commit 로고" width="112">
 </p>
 
+
+제한 시간 입력란 옆의 물음표 아이콘을 클릭하면 설명이 표시됩니다. 연결 테스트 성공은 녹색 아이콘과 텍스트로, 실패는 빨간색 아이콘과 텍스트로 표시됩니다.
 <h1 align="center">Easy AI Commit</h1>
 
 <p align="center">

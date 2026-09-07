@@ -2,6 +2,8 @@
   <img src="branding/easy-ai-commit-logo.png" alt="Easy AI Commit logo" width="112">
 </p>
 
+
+Click the question-mark icon beside the timeout value for details. Connection tests show a green success indicator or a red failure indicator, with text explaining the result.
 <h1 align="center">Easy AI Commit</h1>
 
 <p align="center">

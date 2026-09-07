@@ -2,6 +2,8 @@
   <img src="../branding/easy-ai-commit-logo.png" alt="Easy AI Commit 标志" width="112">
 </p>
 
+
+点击超时输入框旁的问号图标可查看说明。连接测试成功显示绿色图标和文字，失败显示红色图标和文字，便于区分结果。
 <h1 align="center">Easy AI Commit</h1>
 
 <p align="center">

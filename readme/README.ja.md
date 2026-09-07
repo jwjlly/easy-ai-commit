@@ -2,6 +2,8 @@
   <img src="../branding/easy-ai-commit-logo.png" alt="Easy AI Commit ロゴ" width="112">
 </p>
 
+
+タイムアウト入力欄の横にある疑問符アイコンをクリックすると説明が表示されます。接続テストの成功は緑色、失敗は赤色のアイコンとテキストで表示されます。
 <h1 align="center">Easy AI Commit</h1>
 
 <p align="center">

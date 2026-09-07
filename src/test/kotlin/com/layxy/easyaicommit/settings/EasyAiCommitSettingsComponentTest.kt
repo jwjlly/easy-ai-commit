@@ -21,10 +21,15 @@ import javax.swing.JSpinner
 import javax.swing.JTextField
 import javax.swing.JButton
 import javax.swing.JTextArea
+import javax.swing.JLabel
+import com.intellij.icons.AllIcons
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertFailsWith
+import javax.swing.SwingUtilities
+import javax.swing.JComponent
+import kotlin.math.abs
 
 class EasyAiCommitSettingsComponentTest : LightPlatformTestCase() {
     fun testNetworkFieldsSwitchWithProfilesWithoutModifyingSavedState() = runInEdtAndWait {
@@ -89,6 +94,39 @@ class EasyAiCommitSettingsComponentTest : LightPlatformTestCase() {
         } finally { component.dispose() }
     }
 
+    fun testNetworkLayoutStaysCompactAndAlignedAtDifferentWidths() = runInEdtAndWait {
+        val component = EasyAiCommitSettingsComponent()
+        try {
+            val service = EasyAiCommitSettingsService()
+            component.reset(service.snapshot())
+            (component.find("proxyMode") as JComboBox<*>).selectedItem = ProxyMode.CUSTOM
+            (component.find("proxyAuthentication") as JCheckBox).doClick()
+            val status = component.find("connectionStatus") as JTextArea
+            val button = component.find("testConnection") as JButton
+            val help = component.find("timeoutHelp") as JButton
+            val timeout = component.find("requestTimeout") as JSpinner
+            for (width in listOf(900, 1150, 1400)) {
+                for (text in listOf("Connection successful", "Connection failed: " + "Check the proxy settings and network. ".repeat(8))) {
+                    status.text = text
+                    component.panel.setSize(width, 1000)
+                    repeat(6) { descendants(component.panel).filterIsInstance<Container>().forEach { it.doLayout() } }
+                    fun origin(item: Component) = SwingUtilities.convertPoint(item, 0, 0, component.panel)
+                    val gap = origin(help).x - (origin(timeout).x + timeout.width)
+                    assertTrue("Help gap=$gap at width=$width", gap in 0..com.intellij.util.ui.JBUI.scale(6))
+                    assertTrue(help.width <= com.intellij.util.ui.JBUI.scale(24))
+                    val buttonBaseline = origin(button).y + button.getBaseline(button.width, button.height)
+                    val textBaseline = origin(status).y + status.getBaseline(status.width, status.height)
+                    assertTrue("Button/text baselines: $buttonBaseline/$textBaseline at width=$width", abs(buttonBaseline - textBaseline) <= 1)
+                    val fieldXs = listOf("proxyType", "proxyHost", "proxyUsername", "proxyPassword").map { origin(component.find(it)).x }
+                    assertEquals("Proxy fields must share one left edge", 1, fieldXs.distinct().size)
+                    val host = component.find("proxyHost") as JComponent
+                    val port = component.find("proxyPort") as JComponent
+                    assertEquals(origin(host).y + host.getBaseline(host.width, host.height), origin(port).y + port.getBaseline(port.width, port.height))
+                }
+            }
+        } finally { component.dispose() }
+    }
+
     fun testSwitchingProfilesCancelsTestAndIgnoresItsLateResult() = runInEdtAndWait {
         MockWebServer().use { slow ->
             MockWebServer().use { fast ->
@@ -110,6 +148,8 @@ class EasyAiCommitSettingsComponentTest : LightPlatformTestCase() {
                     component.reset(service.snapshot())
                     val button = component.find("testConnection") as JButton
                     val status = component.find("connectionStatus") as JTextArea
+                    val icon = component.find("connectionStatusIcon") as JLabel
+                    val idleColor = status.foreground
                     (component.find("apiKey") as JTextField).text = "local-test-key"
                     button.doClick()
                     assertFalse(button.isEnabled)
@@ -125,14 +165,46 @@ class EasyAiCommitSettingsComponentTest : LightPlatformTestCase() {
                     assertTrue(latestStatus, latestStatus.contains(message("proxy.mode.direct")))
                     assertTrue(latestStatus, latestStatus.contains(message("network.connection.unsaved")))
                     assertEquals(1, fast.requestCount)
+                    assertEquals(AllIcons.General.InspectionsOK, icon.icon)
+                    val successColor = status.foreground
+                    assertFalse(idleColor == successColor)
+                    render(component, "connection-success")
 
                     val afterSlowResponse = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(700)
                     dispatchUntil { System.nanoTime() >= afterSlowResponse }
                     assertEquals(latestStatus, status.text)
                     assertTrue(button.isEnabled)
+                    fast.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":{"message":"Invalid test API key"}}"""))
+                    button.doClick()
+                    dispatchUntil { button.isEnabled }
+                    assertEquals(AllIcons.General.Error, icon.icon)
+                    assertFalse(successColor == status.foreground)
+                    assertTrue(status.text, status.text.contains("401"))
+                    render(component, "connection-failure")
+                    (component.find("requestTimeout") as JSpinner).value = 30
+                    assertEquals("", status.text)
+                    assertFalse(icon.isVisible)
+                    assertEquals(idleColor, status.foreground)
                 } finally { component.dispose() }
             }
         }
+    }
+
+    fun testTimeoutHelpReplacesInlineDescriptionAndValidationFailureIsHighlighted() = runInEdtAndWait {
+        val component = EasyAiCommitSettingsComponent()
+        try {
+            component.reset(EasyAiCommitSettingsService().snapshot())
+            val help = component.find("timeoutHelp") as JButton
+            assertEquals(AllIcons.General.ContextHelp, help.icon)
+            assertEquals(message("network.timeout.help"), help.accessibleContext.accessibleName)
+            assertTrue(help.isFocusable)
+            assertTrue(help.actionListeners.isNotEmpty())
+            assertFalse(descendants(component.panel).filterIsInstance<JLabel>().any { it.text == message("network.timeout.hint") })
+            (component.find("proxyMode") as JComboBox<*>).selectedItem = ProxyMode.CUSTOM
+            (component.find("testConnection") as JButton).doClick()
+            assertEquals(AllIcons.General.Error, (component.find("connectionStatusIcon") as JLabel).icon)
+            assertTrue((component.find("connectionStatus") as JTextArea).text.contains(message("proxy.validation.host")))
+        } finally { component.dispose() }
     }
 
     fun testMissingProxyPasswordKeepsDraftAndDoesNotSaveSettings() = runInEdtAndWait {

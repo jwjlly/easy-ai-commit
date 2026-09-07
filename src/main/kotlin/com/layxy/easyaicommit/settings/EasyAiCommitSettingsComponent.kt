@@ -29,9 +29,17 @@ import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.options.SearchableConfigurable
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
+import com.intellij.icons.AllIcons
+import com.intellij.ui.AnimatedIcon
+import com.intellij.ui.JBColor
+import com.intellij.openapi.ui.popup.JBPopup
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.Font
+import java.awt.GridBagLayout
+import java.awt.GridBagConstraints
+import java.awt.Insets
 import java.awt.event.ActionListener
 import java.util.UUID
 import javax.swing.DefaultComboBoxModel
@@ -44,6 +52,7 @@ import javax.swing.JPasswordField
 import javax.swing.JSpinner
 import javax.swing.JSplitPane
 import javax.swing.SpinnerNumberModel
+import javax.swing.SwingConstants
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
@@ -58,12 +67,19 @@ internal class EasyAiCommitSettingsComponent {
     private val apiKey = JBPasswordField()
     private val clearApiKey = JButton(message("settings.button.clear"))
     private val testConnection = JButton(message("settings.button.testConnection"))
-    private val connectionStatus = JBTextArea(2, 35).apply {
+    private val connectionStatusIcon = JBLabel().apply {
+        verticalAlignment = SwingConstants.CENTER
+        isVisible = false
+    }
+    private val connectionStatus = JBTextArea(1, 24).apply {
         isEditable = false
         lineWrap = true
         wrapStyleWord = true
         isOpaque = false
         font = JBLabel().font
+        border = JBUI.Borders.empty()
+        margin = Insets(0, 0, 0, 0)
+        minimumSize = Dimension(0, getFontMetrics(font).height)
     }
     private val proxyMode = ComboBox(ProxyMode.entries.toTypedArray())
     private val proxyType = ComboBox(ProxyType.entries.toTypedArray())
@@ -82,6 +98,26 @@ internal class EasyAiCommitSettingsComponent {
         )
     }
     private val requestTimeout = JSpinner(SpinnerNumberModel(90, 5, 300, 5))
+    private var timeoutHelpPopup: JBPopup? = null
+    private val timeoutHelp = JButton(AllIcons.General.ContextHelp).apply {
+        toolTipText = message("network.timeout.help")
+        accessibleContext.accessibleName = message("network.timeout.help")
+        isContentAreaFilled = false
+        border = JBUI.Borders.empty(4)
+        // Native themes may otherwise give an icon-only JButton a full text-button width.
+        preferredSize = JBUI.size(24, 24)
+        minimumSize = preferredSize
+        maximumSize = preferredSize
+        addActionListener {
+            timeoutHelpPopup?.cancel()
+            val content = JBLabel(message("network.timeout.hint")).apply { border = JBUI.Borders.empty(10) }
+            timeoutHelpPopup = JBPopupFactory.getInstance().createComponentPopupBuilder(content, null)
+                .setFocusable(true)
+                .setRequestFocus(true)
+                .setCancelOnClickOutside(true)
+                .createPopup().also { it.showUnderneathOf(this) }
+        }
+    }
     private val outputLanguage = ComboBox(OutputLanguage.options).withWidth(260)
     private val promptTemplate = JBTextArea(10, 48)
     private val maxDiffCharacters = JSpinner(SpinnerNumberModel(60_000, 5_000, 200_000, 5_000))
@@ -109,6 +145,7 @@ internal class EasyAiCommitSettingsComponent {
             "proxyUsername" to proxyUsername, "proxyPassword" to proxyPassword,
             "proxyDetails" to proxyDetails, "proxyAuthenticationFields" to proxyAuthenticationFields,
             "requestTimeout" to requestTimeout,
+            "timeoutHelp" to timeoutHelp, "connectionStatusIcon" to connectionStatusIcon,
         ).forEach { (name, component) -> component.name = name }
         installListeners()
     }
@@ -290,9 +327,26 @@ internal class EasyAiCommitSettingsComponent {
             add(apiKey, BorderLayout.CENTER)
             add(clearApiKey, BorderLayout.EAST)
         }
-        val connectionPanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
-            add(testConnection, BorderLayout.WEST)
-            add(connectionStatus, BorderLayout.CENTER)
+        val connectionPanel = JPanel(GridBagLayout()).apply {
+            add(testConnection, GridBagConstraints().apply {
+                gridx = 0
+                anchor = GridBagConstraints.BASELINE_LEADING
+            })
+            add(JPanel(BorderLayout()).apply {
+                preferredSize = Dimension(JBUI.scale(16), testConnection.preferredSize.height)
+                add(connectionStatusIcon, BorderLayout.CENTER)
+            }, GridBagConstraints().apply {
+                gridx = 1
+                anchor = GridBagConstraints.NORTHWEST
+                insets = JBUI.insetsLeft(8)
+            })
+            add(connectionStatus, GridBagConstraints().apply {
+                gridx = 2
+                weightx = 1.0
+                fill = GridBagConstraints.HORIZONTAL
+                anchor = GridBagConstraints.BASELINE_LEADING
+                insets = JBUI.insetsLeft(6)
+            })
         }
 
         proxyPassword.emptyText.text = message("proxy.password.placeholder")
@@ -301,27 +355,56 @@ internal class EasyAiCommitSettingsComponent {
             add(proxyPassword, BorderLayout.CENTER)
             add(clearProxyPassword, BorderLayout.EAST)
         }
-        proxyAuthenticationFields.add(FormBuilder.createFormBuilder()
-            .addLabeledComponent(message("proxy.label.username"), proxyUsername)
-            .addLabeledComponent(message("proxy.label.password"), passwordPanel).panel)
-        proxyDetails.add(FormBuilder.createFormBuilder()
-            .addLabeledComponent(message("proxy.label.type"), proxyType)
-            .addLabeledComponent(message("proxy.label.host"), proxyHost)
-            .addLabeledComponent(message("proxy.label.port"), proxyPort)
-            .addComponent(proxyAuthentication)
+        val proxyLabelWidth = listOf("type", "host", "username", "password")
+            .maxOf { JBLabel(message("proxy.label.$it")).preferredSize.width }
+        fun proxyLabel(key: String, field: JComponent) = JBLabel(message("proxy.label.$key")).apply {
+            labelFor = field
+            preferredSize = Dimension(proxyLabelWidth, preferredSize.height)
+        }
+        proxyPort.columns = 5
+        val addressPanel = JPanel(GridBagLayout()).apply {
+            add(proxyHost, GridBagConstraints().apply {
+                gridx = 0
+                weightx = 1.0
+                fill = GridBagConstraints.HORIZONTAL
+                anchor = GridBagConstraints.BASELINE_LEADING
+            })
+            add(JBLabel(message("proxy.label.port")).apply { labelFor = proxyPort }, GridBagConstraints().apply {
+                gridx = 1
+                anchor = GridBagConstraints.BASELINE_LEADING
+                insets = JBUI.insetsLeft(12)
+            })
+            add(proxyPort, GridBagConstraints().apply {
+                gridx = 2
+                anchor = GridBagConstraints.BASELINE_LEADING
+                insets = JBUI.insetsLeft(6)
+            })
+        }
+        proxyAuthenticationFields.add(FormBuilder.createFormBuilder().setVerticalGap(6)
+            .addLabeledComponent(proxyLabel("username", proxyUsername), proxyUsername)
+            .addLabeledComponent(proxyLabel("password", proxyPassword), passwordPanel).panel)
+        proxyDetails.border = JBUI.Borders.empty(0, 12, 4, 0)
+        proxyDetails.add(FormBuilder.createFormBuilder().setVerticalGap(6)
+            .addLabeledComponent(proxyLabel("type", proxyType), JPanel(BorderLayout()).apply {
+                add(proxyType.withWidth(120), BorderLayout.WEST)
+            })
+            .addLabeledComponent(proxyLabel("host", proxyHost), addressPanel)
+            .addComponentToRightColumn(proxyAuthentication)
             .addComponent(proxyAuthenticationFields).panel)
         val modePanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
             add(proxyMode, BorderLayout.CENTER)
             add(openIdeProxy, BorderLayout.EAST)
         }
-        val networkPanel = JPanel(BorderLayout()).apply {
-            add(modePanel, BorderLayout.NORTH)
-            add(proxyDetails, BorderLayout.CENTER)
-        }
         requestTimeout.toolTipText = message("network.timeout.hint")
-        val timeoutPanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
-            add(requestTimeout, BorderLayout.WEST)
-            add(JBLabel(message("network.timeout.hint")), BorderLayout.CENTER)
+        val timeoutControls = JPanel(GridBagLayout()).apply {
+            add(requestTimeout, GridBagConstraints().apply { gridx = 0 })
+            add(timeoutHelp, GridBagConstraints().apply {
+                gridx = 1
+                insets = JBUI.insetsLeft(4)
+            })
+        }
+        val timeoutPanel = JPanel(BorderLayout()).apply {
+            add(timeoutControls, BorderLayout.WEST)
         }
 
         val form = FormBuilder.createFormBuilder()
@@ -331,7 +414,8 @@ internal class EasyAiCommitSettingsComponent {
             .addLabeledComponent(message("settings.label.baseUrl"), baseUrl)
             .addLabeledComponent(message("settings.label.model"), model)
             .addLabeledComponent(message("settings.label.apiKey"), apiKeyPanel)
-            .addLabeledComponent(message("proxy.label.mode"), networkPanel)
+            .addLabeledComponent(message("proxy.label.mode"), modePanel)
+            .addComponentToRightColumn(proxyDetails, 0)
             .addLabeledComponent(message("network.label.timeout"), timeoutPanel)
             .addLabeledComponent(message("settings.label.connection"), connectionPanel)
             .addLabeledComponent(message("settings.label.outputLanguage"), outputLanguage)
@@ -565,7 +649,8 @@ internal class EasyAiCommitSettingsComponent {
             commitTimeoutEditor()
             profilesList.selectedValue?.proxy?.toModel()?.validate()
         } catch (error: Exception) {
-            connectionStatus.text = error.message.orEmpty()
+            invalidateTest()
+            showConnectionStatus(message("settings.connection.failed", error.message.orEmpty()), ConnectionState.ERROR)
             return
         }
         val profile = profilesList.selectedValue?.copyState() ?: return
@@ -577,7 +662,7 @@ internal class EasyAiCommitSettingsComponent {
         testIndicator = indicator
         val unsaved = isModified(EasyAiCommitSettingsService.getInstance().snapshot())
         testConnection.isEnabled = false
-        connectionStatus.text = message("settings.connection.testing")
+        showConnectionStatus(message("settings.connection.testing"), ConnectionState.TESTING)
 
         ApplicationManager.getApplication().executeOnPooledThread {
             val started = System.nanoTime()
@@ -598,7 +683,7 @@ internal class EasyAiCommitSettingsComponent {
                     if (disposed || testRevision != revision || indicator.isCanceled) return@invokeLater
                     testIndicator = null
                     testConnection.isEnabled = true
-                    connectionStatus.text = result.fold(
+                    val statusText = result.fold(
                         onSuccess = {
                             val seconds = String.format(java.util.Locale.ROOT, "%.1f", (System.nanoTime() - started) / 1_000_000_000.0)
                             message("network.connection.success", profile.proxy.toModel().description(), seconds) +
@@ -608,6 +693,7 @@ internal class EasyAiCommitSettingsComponent {
                             message("settings.connection.failed", it.message.orEmpty())
                         },
                     )
+                    showConnectionStatus(statusText, if (result.isSuccess) ConnectionState.SUCCESS else ConnectionState.ERROR)
                 },
                 ModalityState.any(),
             )
@@ -651,12 +737,14 @@ internal class EasyAiCommitSettingsComponent {
         testRevision++
         testIndicator?.cancel()
         testIndicator = null
-        connectionStatus.text = ""
+        showConnectionStatus("", ConnectionState.IDLE)
         testConnection.isEnabled = !disposed && profilesList.selectedValue != null
     }
 
     fun dispose() {
         disposed = true
+        timeoutHelpPopup?.cancel()
+        timeoutHelpPopup = null
         invalidateTest()
         secretEdits.clear()
         proxySecretEdits.clear()
@@ -688,10 +776,29 @@ internal class EasyAiCommitSettingsComponent {
             outputLanguage,
             promptTemplate,
             proxyMode, proxyType, proxyHost, proxyPort, proxyAuthentication,
-            proxyUsername, proxyPassword, clearProxyPassword, requestTimeout, openIdeProxy,
+            proxyUsername, proxyPassword, clearProxyPassword, requestTimeout, timeoutHelp, openIdeProxy,
         ).forEach { it.isEnabled = enabled }
         val selectedPreset = providerPreset.selectedItem as? ProviderPreset
         protocol.isEnabled = enabled && (selectedPreset?.supportedProtocols?.size ?: 0) > 1
+    }
+
+    private enum class ConnectionState { IDLE, TESTING, SUCCESS, ERROR }
+
+    private fun showConnectionStatus(text: String, state: ConnectionState) {
+        connectionStatus.text = text
+        connectionStatus.foreground = when (state) {
+            ConnectionState.SUCCESS -> JBColor.namedColor("Label.successForeground", JBColor(0x1B7F37, 0x73BD79))
+            ConnectionState.ERROR -> JBColor.namedColor("Label.errorForeground", JBColor(0xB3261E, 0xFF8A80))
+            else -> JBLabel().foreground
+        }
+        connectionStatusIcon.icon = when (state) {
+            ConnectionState.SUCCESS -> AllIcons.General.InspectionsOK
+            ConnectionState.ERROR -> AllIcons.General.Error
+            ConnectionState.TESTING -> AnimatedIcon.Default.INSTANCE
+            ConnectionState.IDLE -> null
+        }
+        connectionStatusIcon.isVisible = state != ConnectionState.IDLE
+        connectionStatusIcon.accessibleContext.accessibleDescription = text
     }
 
     private fun JPasswordField.onTextChanged(listener: () -> Unit) {
