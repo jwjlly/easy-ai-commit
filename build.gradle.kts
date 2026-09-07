@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.layxy.easyaicommit"
-version = "0.1.1"
+version = "0.2.0"
 
 repositories {
     mavenCentral()
@@ -56,9 +56,20 @@ intellijPlatform {
         }
 
         changeNotes = """
-            Renamed the plugin to Easy AI Commit.
-            Fixed credential storage compatibility with IntelliJ IDEA 2026.1 and later
-            while retaining the IntelliJ IDEA 2024.2 minimum supported version.
+            <ul>
+                <li>Added per-model proxy settings: IDE proxy, direct connection, or custom HTTP/SOCKS5 proxy,
+                    with optional HTTP Basic proxy authentication.</li>
+                <li>Added a configurable total request timeout of 5–300 seconds (default: 90 seconds).
+                    Timed-out requests are canceled without replacing the existing commit message.</li>
+                <li>Breaking behavior change: the previous 90-second read timeout is now a total network
+                    request deadline, including connection and the complete response. Slow requests may
+                    time out sooner; adjust the model profile timeout if needed.</li>
+                <li>Added credential save read-back verification and clearer proxy errors.
+                    Connection tests use current form values and discard stale results.</li>
+                <li>Updated English, Simplified Chinese, Japanese, and Korean UI text and documentation.</li>
+                <li>Existing profiles default to IDE proxy settings and a 90-second total timeout.
+                    The IntelliJ IDEA 2024.2 minimum supported version is unchanged.</li>
+            </ul>
         """.trimIndent()
     }
 
