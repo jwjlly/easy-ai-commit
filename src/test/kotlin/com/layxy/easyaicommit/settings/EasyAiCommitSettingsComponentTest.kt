@@ -132,11 +132,13 @@ class EasyAiCommitSettingsComponentTest : LightPlatformTestCase() {
             MockWebServer().use { fast ->
                 val body = """{"choices":[{"message":{"content":"OK"}}]}"""
                 slow.enqueue(MockResponse().setBody(body).setBodyDelay(500, TimeUnit.MILLISECONDS))
-                fast.enqueue(MockResponse().setBody(body))
+                fast.enqueue(MockResponse().setBody("""{
+                    "status":"completed", "output":[{"type":"message","content":[{"type":"output_text","text":"OK"}]}]
+                }"""))
                 val profiles = listOf(slow, fast).map { server ->
                     ModelProfileState.defaultOpenAi().apply {
                         id = "ui-test-${server.port}"
-                        baseUrl = server.url("/v1").toString()
+                        baseUrl = server.url(if (server === fast) "/v1/responses" else "/v1").toString()
                         proxy.mode = ProxyMode.DIRECT.name
                         requestTimeoutSeconds = 5
                     }
@@ -165,6 +167,7 @@ class EasyAiCommitSettingsComponentTest : LightPlatformTestCase() {
                     assertTrue(latestStatus, latestStatus.contains(message("proxy.mode.direct")))
                     assertTrue(latestStatus, latestStatus.contains(message("network.connection.unsaved")))
                     assertEquals(1, fast.requestCount)
+                    assertEquals("/v1/responses", fast.takeRequest(1, TimeUnit.SECONDS)!!.path)
                     assertEquals(AllIcons.General.InspectionsOK, icon.icon)
                     val successColor = status.foreground
                     assertFalse(idleColor == successColor)

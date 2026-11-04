@@ -72,6 +72,8 @@ The installable ZIP is created in `build/distributions/`. In the IDE, open `Sett
 
 Generation starts immediately. When it succeeds, the current Commit Message text is replaced with the generated result.
 
+For the Responses API, select `OpenAI Compatible` and set **Base URL** to the full endpoint, for example `https://api.openai.com/v1/responses` (or your gateway’s `/v1/responses` URL). A URL ending in `/responses` selects this API automatically, including for connection tests. A base such as `https://api.openai.com/v1` or a full `/chat/completions` URL continues to use Chat Completions. The endpoint must support the selected API; there is no automatic fallback. Incomplete or refused responses leave the existing commit message unchanged.
+
 ## Proxy and request timeout
 
 Each model profile has its own **Network Proxy** and **Request Timeout (seconds)** settings, above **Test Connection**.

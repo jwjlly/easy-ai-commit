@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.layxy.easyaicommit"
-version = "0.2.0"
+version = "0.3.0"
 
 repositories {
     mavenCentral()
@@ -57,19 +57,17 @@ intellijPlatform {
 
         changeNotes = """
             <ul>
-                <li>Added per-model proxy settings: IDE proxy, direct connection, or custom HTTP/SOCKS5 proxy,
-                    with optional HTTP Basic proxy authentication.</li>
-                <li>Added a configurable total request timeout of 5–300 seconds (default: 90 seconds).
-                    Timed-out requests are canceled without replacing the existing commit message.</li>
-                <li>Breaking behavior change: the previous 90-second read timeout is now a total network
-                    request deadline, including connection and the complete response. Slow requests may
-                    time out sooner; adjust the model profile timeout if needed.</li>
-                <li>Added credential save read-back verification and clearer proxy errors.
-                    Connection tests use current form values and discard stale results.</li>
-                <li>Updated English, Simplified Chinese, Japanese, and Korean UI text and documentation.</li>
-                <li>New profiles and profiles without a stored proxy mode default to no proxy (direct connection).
-                    Explicitly stored proxy choices are preserved. The default total timeout is 90 seconds.
-                    The IntelliJ IDEA 2024.2 minimum supported version is unchanged.</li>
+                <li>Added Responses API support under OpenAI Compatible. Set the Base URL to a full endpoint
+                    ending in /responses, such as https://api.openai.com/v1/responses, for generation and
+                    connection tests.</li>
+                <li>Existing base URLs and /chat/completions endpoints continue to use Chat Completions.
+                    Anthropic Compatible connections are unchanged.</li>
+                <li>Responses API requests disable response storage and support text extraction alongside
+                    reasoning output. Incomplete, failed, refused, or empty responses preserve the existing
+                    commit message.</li>
+                <li>Added configuration guidance and error messages in English, Simplified Chinese,
+                    Japanese, and Korean, with synchronized documentation.</li>
+                <li>No breaking changes. The IntelliJ IDEA 2024.2 minimum supported version is unchanged.</li>
             </ul>
         """.trimIndent()
     }

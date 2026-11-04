@@ -72,6 +72,8 @@
 
 생성은 즉시 시작됩니다. 성공하면 현재 Commit Message가 생성된 결과로 대체됩니다.
 
+Responses API를 사용하려면 `OpenAI Compatible`을 선택하고 **Base URL**에 `https://api.openai.com/v1/responses` 같은 전체 엔드포인트(또는 게이트웨이의 `/v1/responses` URL)를 입력하세요. `/responses`로 끝나는 URL은 연결 테스트를 포함해 이 API를 자동으로 사용합니다. `https://api.openai.com/v1` 같은 기본 URL이나 전체 `/chat/completions` URL은 계속 Chat Completions를 사용합니다. 서버는 선택한 API를 지원해야 하며 자동으로 다른 API로 전환하지 않습니다. 응답이 완료되지 않거나 생성이 거부되면 기존 커밋 메시지를 유지합니다.
+
 ## 프록시 및 요청 제한 시간
 
 각 모델 프로필에는 **연결 테스트** 위에 독립적인 **네트워크 프록시** 및 **요청 제한 시간(초)** 설정이 있습니다.

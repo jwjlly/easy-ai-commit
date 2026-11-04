@@ -72,6 +72,8 @@
 
 生成は直ちに始まります。成功すると、現在の Commit Message が生成結果に置き換わります。
 
+Responses API を使うには、`OpenAI Compatible` を選択し、**Base URL** に `https://api.openai.com/v1/responses` などの完全なエンドポイント（またはゲートウェイの `/v1/responses` URL）を入力します。`/responses` で終わる URL では、接続テストを含めてこの API を自動的に使用します。`https://api.openai.com/v1` のようなベース URL や完全な `/chat/completions` URL は引き続き Chat Completions を使用します。接続先は選択した API に対応している必要があり、自動切り替えは行いません。応答が未完了または生成が拒否された場合、既存のコミットメッセージは保持されます。
+
 ## プロキシとリクエストのタイムアウト
 
 各モデルプロファイルには、**接続をテスト**の上に独立した**ネットワークプロキシ**と**リクエストのタイムアウト（秒）**があります。

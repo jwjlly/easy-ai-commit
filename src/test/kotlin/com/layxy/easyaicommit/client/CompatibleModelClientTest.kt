@@ -43,6 +43,93 @@ class CompatibleModelClientTest {
     }
 
     @Test
+    fun `preserves full responses endpoints and gateway prefixes`() {
+        listOf("/v1/responses", "/gateway/openai/v1/responses", "/responses").forEach { path ->
+            assertEquals(
+                "https://example.test$path",
+                CompatibleModelClient.endpoint("  https://example.test$path///  ", ModelProtocol.OPENAI_COMPATIBLE),
+            )
+        }
+        assertEquals(
+            "https://example.test/responses-proxy/chat/completions",
+            CompatibleModelClient.endpoint("https://example.test/responses-proxy", ModelProtocol.OPENAI_COMPATIBLE),
+        )
+    }
+
+    @Test
+    fun `responses parser collects all output text and ignores reasoning and tools`() {
+        val json = """{
+            "status":"completed", "error":null,
+            "output":[
+                {"type":"reasoning","summary":[{"type":"summary_text","text":"private reasoning"}]},
+                {"type":"function_call","arguments":"ignored"},
+                {"type":"message","status":"completed","content":[
+                    {"type":"output_text","text":"feat: add "},
+                    {"type":"output_text","text":"responses"}
+                ]},
+                {"type":"message","content":[{"type":"output_text","text":"\n\nSupport gateways."}]}
+            ]
+        }"""
+        assertEquals("feat: add responses\n\nSupport gateways.", CompatibleModelClient.parseResponsesResponse(json))
+    }
+
+    @Test
+    fun `responses parser rejects unfinished generation even with partial output`() {
+        listOf("incomplete", "failed", "cancelled", "queued", "in_progress").forEach { status ->
+            val error = assertFailsWith<ModelRequestException> {
+                CompatibleModelClient.parseResponsesResponse("""{
+                    "status":"$status", "incomplete_details":null,
+                    "output":[{"type":"message","content":[{"type":"output_text","text":"partial"}]}]
+                }""")
+            }
+            assertEquals(message("client.error.responsesNotCompleted", status), error.message)
+        }
+        val error = assertFailsWith<ModelRequestException> {
+            CompatibleModelClient.parseResponsesResponse("""{
+                "status":"incomplete", "incomplete_details":{"reason":"max_output_tokens"}, "output":[]
+            }""")
+        }
+        assertEquals(message("client.error.responsesNotCompleted", "max_output_tokens"), error.message)
+        val itemError = assertFailsWith<ModelRequestException> {
+            CompatibleModelClient.parseResponsesResponse("""{
+                "output":[{"type":"message","status":"incomplete","content":[{"type":"output_text","text":"partial"}]}]
+            }""")
+        }
+        assertEquals(message("client.error.responsesNotCompleted", "incomplete"), itemError.message)
+    }
+
+    @Test
+    fun `responses parser surfaces errors and refusals`() {
+        val remoteError = assertFailsWith<ModelRequestException> {
+            CompatibleModelClient.parseResponsesResponse("""{"status":"failed","error":{"message":"invalid model"},"output":[]}""")
+        }
+        assertEquals("invalid model", remoteError.message)
+        val refusal = assertFailsWith<ModelRequestException> {
+            CompatibleModelClient.parseResponsesResponse("""{
+                "status":"completed", "output":[{"type":"message","content":[
+                    {"type":"output_text","text":"partial"}, {"type":"refusal","refusal":"Cannot comply"}
+                ]}]
+            }""")
+        }
+        assertEquals(message("client.error.responsesRefused"), refusal.message)
+    }
+
+    @Test
+    fun `responses parser handles missing empty and malformed content`() {
+        listOf("{}", "{\"output\":null}", "{\"output\":{}}").forEach { json ->
+            val error = assertFailsWith<ModelRequestException> { CompatibleModelClient.parseResponsesResponse(json) }
+            assertEquals(message("client.error.openaiMissingMessage"), error.message)
+        }
+        listOf(
+            """{"output":[]}""",
+            """{"output":[null,{},42,{"type":"message","content":null}]}""",
+            """{"output":[{"type":"message","content":[null,{"type":"output_text","text":null},{"type":"output_text","text":42}]}]}""",
+        ).forEach { json -> assertEquals("", CompatibleModelClient.parseResponsesResponse(json)) }
+        val invalid = assertFailsWith<ModelRequestException> { CompatibleModelClient.parseResponsesResponse("not json") }
+        assertEquals(message("client.error.invalidJson"), invalid.message)
+    }
+
+    @Test
     fun `surfaces compatible api errors`() {
         val error = assertFailsWith<ModelRequestException> {
             CompatibleModelClient.parseOpenAiResponse("""{"error":{"message":"invalid model"}}""")

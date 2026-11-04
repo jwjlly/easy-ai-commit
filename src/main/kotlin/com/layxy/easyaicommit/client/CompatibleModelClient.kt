@@ -62,7 +62,11 @@ object CompatibleModelClient {
 
         return when (protocol) {
             ModelProtocol.OPENAI_COMPATIBLE ->
-                if (normalized.endsWith("/chat/completions")) normalized else "$normalized/chat/completions"
+                if (normalized.endsWith("/chat/completions") || normalized.endsWith("/responses")) {
+                    normalized
+                } else {
+                    "$normalized/chat/completions"
+                }
             ModelProtocol.ANTHROPIC_COMPATIBLE ->
                 if (normalized.endsWith("/messages")) normalized else "$normalized/messages"
         }
@@ -101,6 +105,40 @@ object CompatibleModelClient {
             .joinToString("\n")
     }
 
+    internal fun parseResponsesResponse(json: String): String {
+        val root = parseObject(json)
+        errorMessage(root)?.let { throw ModelRequestException(it) }
+        val status = root.stringValue("status")
+        if (status != null && status != "completed") {
+            val reason = root.get("incomplete_details")?.takeIf { it.isJsonObject }
+                ?.asJsonObject?.stringValue("reason") ?: status
+            throw ModelRequestException(message("client.error.responsesNotCompleted", reason))
+        }
+        val output = root.get("output")?.takeIf { it.isJsonArray }?.asJsonArray
+            ?: throw ModelRequestException(message("client.error.openaiMissingMessage"))
+        val texts = mutableListOf<String>()
+        for (item in output) {
+            val outputItem = item.takeIf { it.isJsonObject }?.asJsonObject ?: continue
+            if (outputItem.stringValue("type") != "message") continue
+            val messageStatus = outputItem.stringValue("status")
+            if (messageStatus != null && messageStatus != "completed") {
+                throw ModelRequestException(message("client.error.responsesNotCompleted", messageStatus))
+            }
+            val content = outputItem.get("content")?.takeIf { it.isJsonArray }?.asJsonArray ?: continue
+            for (part in content) {
+                val block = part.takeIf { it.isJsonObject }?.asJsonObject ?: continue
+                when (block.stringValue("type")) {
+                    "output_text" -> block.stringValue("text")?.let(texts::add)
+                    "refusal" -> throw ModelRequestException(message("client.error.responsesRefused"))
+                }
+            }
+        }
+        return texts.joinToString("")
+    }
+
+    private fun JsonObject.stringValue(name: String): String? =
+        get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+
     internal fun cleanGeneratedMessage(value: String): String {
         var result = value.trim()
         if (result.startsWith("```") && result.endsWith("```")) {
@@ -125,8 +163,18 @@ object CompatibleModelClient {
         indicator: ProgressIndicator?,
         proxyPassword: String,
     ): String {
+        val url = endpoint(profile.baseUrl, profile.protocol)
+        val usesResponses = url.endsWith("/responses")
         val body = gson.toJson(
-            mapOf(
+            if (usesResponses) mapOf(
+                "model" to profile.model,
+                "instructions" to "Write a concise Git commit message. Return only the commit message.",
+                "input" to prompt,
+                // The output budget also includes reasoning tokens. Omit temperature for reasoning models.
+                "max_output_tokens" to 4096,
+                "store" to false,
+                "stream" to false,
+            ) else mapOf(
                 "model" to profile.model,
                 "messages" to listOf(
                     mapOf(
@@ -144,7 +192,7 @@ object CompatibleModelClient {
         val response = postJson(
             profile = profile,
             proxyPassword = proxyPassword,
-            url = endpoint(profile.baseUrl, profile.protocol),
+            url = url,
             body = body,
             headers = buildMap {
                 putAll(apiKeyHeaders(profile, apiKey))
@@ -155,7 +203,7 @@ object CompatibleModelClient {
             },
             indicator = indicator,
         )
-        return parseOpenAiResponse(response)
+        return if (usesResponses) parseResponsesResponse(response) else parseOpenAiResponse(response)
     }
 
     private fun requestAnthropic(

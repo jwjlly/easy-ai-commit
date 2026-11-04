@@ -62,7 +62,9 @@ internal class EasyAiCommitSettingsComponent {
     private val profileName = JBTextField()
     private val providerPreset = ComboBox(ProviderPreset.entries.toTypedArray()).withWidth(300)
     private val protocol = ComboBox(ModelProtocol.entries.toTypedArray()).withWidth(260)
-    private val baseUrl = JBTextField()
+    private val baseUrl = JBTextField().apply {
+        toolTipText = message("settings.baseUrl.hint")
+    }
     private val model = JBTextField()
     private val apiKey = JBPasswordField()
     private val clearApiKey = JButton(message("settings.button.clear"))

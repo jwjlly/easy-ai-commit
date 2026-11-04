@@ -72,6 +72,8 @@
 
 生成会立即开始。成功后，当前 Commit Message 内容会被生成结果替换。
 
+使用 Responses API 时，选择 `OpenAI Compatible`，并将 **Base URL** 填为完整接口地址，例如 `https://api.openai.com/v1/responses`（或网关的 `/v1/responses` 地址）。以 `/responses` 结尾的地址会自动使用该 API，连接测试也遵循同样规则。填写 `https://api.openai.com/v1` 这样的基础地址或完整的 `/chat/completions` 地址仍使用 Chat Completions。服务端须支持所选 API，插件不会自动回退；响应未完成或模型拒绝生成时，保留原有提交信息。
+
 ## 代理与请求超时
 
 每个模型配置都有独立的**网络代理**和**请求超时（秒）**设置，位于**测试连接**上方。
